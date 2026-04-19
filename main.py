@@ -39,10 +39,15 @@ app = FastAPI(
     lifespan=lifespan 
 )
 
-# 2. CORS SETUP
+# --- Update this list in your main.py ---
+origins = [
+    "http://localhost:3000",
+    "https://senticpulse-frontend.vercel.app", # Add your REAL Vercel URL here
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], 
+    allow_origins=origins,  # This tells the backend to trust your new site
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -97,4 +102,7 @@ def analyze_text(message: UserMessage):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    import os
+    # Pull the port from Render's environment, or default to 8000 for local
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
