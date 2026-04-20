@@ -172,10 +172,10 @@ def send_welcome_email(user_email: str, user_name: str, sender: str, password: s
                 <p>Welcome to SenticPulse AI! 🚀</p>
                 <p>Your account has been successfully created. We're excited to help you harness SME intelligence with our Neural Core engine.</p>
                 <div class="btn-wrapper">
-                    <a href="http://localhost:3000/login" class="btn">Access Dashboard</a>
+                    <a href="https://senticpulse-frontend.vercel.app/dashboard" class="btn">Access Dashboard</a>
                 </div>
                 <p style="margin-top: 30px; font-size: 12px; opacity: 0.7;">
-                    Login URL: <a href="http://localhost:3000/login" style="color: #b3ffe2;">http://localhost:3000/login</a>
+                    Login URL: <a href="https://senticpulse-frontend.vercel.app/register" style="color: #b3ffe2;">https://senticpulse-frontend.vercel.app/register</a>
                 </p>
             </div>
             <div class="footer">
@@ -185,7 +185,7 @@ def send_welcome_email(user_email: str, user_name: str, sender: str, password: s
     </body>
     </html>
     """
-    msg.set_content(f"Hi {user_name}, Welcome to SenticPulse AI! Login here: http://localhost:3000/login")
+    msg.set_content(f"Hi {user_name}, Welcome to SenticPulse AI! Login here: https://senticpulse-frontend.vercel.app/register")
     msg.add_alternative(html_content, subtype='html')
 
     try:
