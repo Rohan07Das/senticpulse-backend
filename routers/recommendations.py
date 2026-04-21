@@ -17,7 +17,7 @@ client = AsyncIOMotorClient(MONGODB_URL)
 db = client.senticpulse_db
 
 # --- NCF MODEL LOADING ---
-MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'senticpulse_ncf_model.h5')
+MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'senticpulse_ncf_model.keras')
 model = None
 
 try:
