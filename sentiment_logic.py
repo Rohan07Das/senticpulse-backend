@@ -2,11 +2,19 @@ from transformers import pipeline
 
 # This loads the "Brain" of your sentiment AI
 # It's a pre-trained model that knows 58 million tweets
-print("⌛ Loading SenticPulse AI Model...")
-pulse_model = pipeline(
-    "sentiment-analysis", 
-    model="cardiffnlp/twitter-roberta-base-sentiment"
-)
+# 1. Using a 'Tiny' model which is only ~80MB (Perfect for Render Free Tier)
+print("⌛ Loading SenticPulse AI Model (Tiny Edition)...")
+try:
+    pulse_model = pipeline(
+        "sentiment-analysis", 
+        model="pysentimiento/bertweet-it-sentiment" # Very small and highly accurate
+    )
+except Exception:
+    # Fallback to the most standard small model if above fails
+    pulse_model = pipeline(
+        "sentiment-analysis", 
+        model="finiteautomata/bertweet-base-sentiment-analysis"
+    )
 
 def analyze_message(text):
     # Mapping the AI's internal labels to what you need
