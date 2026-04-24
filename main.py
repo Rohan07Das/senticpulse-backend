@@ -4,25 +4,25 @@ from pydantic import BaseModel
 from routers import auth, recommendations
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
-import random 
 import datetime 
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-# --- Import Transformers for Sentiment ---
-from transformers import pipeline
+# --- Import Ultra-Lightweight VADER Sentiment ---
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-# 1. Load Environment Variables
 load_dotenv()
 
 class UserMessage(BaseModel):
     text: str
     email: str = "guest"
 
-# --- DATABASE CONNECTION & AI MODEL LIFESPAN ---
+# Initialize VADER globally (Uses almost 0 RAM)
+sentiment_analyzer = SentimentIntensityAnalyzer()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # A. Connect to MongoDB (Fastest task)
+    # Connect to MongoDB
     uri = os.getenv("MONGODB_URL") 
     app.mongodb_client = AsyncIOMotorClient(uri)
     app.db = app.mongodb_client.senticpulse_db
@@ -30,19 +30,7 @@ async def lifespan(app: FastAPI):
     app.state.EMAIL_SENDER = os.getenv("EMAIL_SENDER")
     app.state.EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
     
-    # B. Lazy Load AI Model
-    # This prevents Render from timing out during the port scan
-    print("⌛ Initializing Neural Core...")
-    try:
-        app.state.sentiment_model = pipeline(
-            "sentiment-analysis", 
-            model="finiteautomata/bertweet-base-sentiment-analysis"
-        )
-        print("✅ Tiny Sentiment Engine Online.")
-    except Exception as e:
-        print(f"❌ AI Load Failed: {e}")
-        app.state.sentiment_model = None
-    
+    print("✅ VADER Sentiment Engine Online.")
     print("🚀 SenticPulse Neural Core: Port Binding Successful")
     yield
     app.mongodb_client.close()
@@ -68,7 +56,6 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(recommendations.router, prefix="/api/recs", tags=["Recommendations"])
 
-# --- ADMIN GLOBAL STATS ---
 @app.get("/api/admin/global-stats", tags=["Admin"])
 async def get_admin_global_stats(request: Request, email: str = Query(...)):
     try:
@@ -117,19 +104,22 @@ async def get_admin_global_stats(request: Request, email: str = Query(...)):
     except Exception as e:
         return {"error": str(e)}
 
-# --- ANALYZE ENDPOINT ---
 @app.post("/api/analyze", tags=["Sentiment"])
 async def analyze_text(request: Request, message: UserMessage):
-    if not request.app.state.sentiment_model:
-        return {"error": "Sentiment engine is currently offline."}
-        
-    mapping = {
-        'neg': 'Negative (-ve)', 'neu': 'Neutral', 'pos': 'Positive (+ve)',
-        'negative': 'Negative (-ve)', 'neutral': 'Neutral', 'positive': 'Positive (+ve)'
-    }
+    # Use VADER to analyze the text
+    scores = sentiment_analyzer.polarity_scores(message.text)
+    compound = scores['compound']
     
-    prediction = request.app.state.sentiment_model(message.text)[0]
-    sentiment_label = mapping.get(prediction['label'].lower(), 'Neutral')
+    # Map the score to your required labels
+    if compound >= 0.05:
+        sentiment_label = 'Positive (+ve)'
+    elif compound <= -0.05:
+        sentiment_label = 'Negative (-ve)'
+    else:
+        sentiment_label = 'Neutral'
+        
+    # Convert compound score to a percentage confidence (approximate)
+    confidence = f"{round(abs(compound) * 100, 2)}%" if compound != 0 else "50.00%"
 
     words = message.text.strip().split()
     keyword = "_".join(words[:2]) if len(words) >= 2 else words[0]
@@ -140,7 +130,7 @@ async def analyze_text(request: Request, message: UserMessage):
             "full_text": message.text, 
             "keyword": keyword[:20],
             "sentiment": sentiment_label,
-            "confidence": f"{round(prediction['score'] * 100, 2)}%",
+            "confidence": confidence,
             "timestamp": datetime.datetime.now(datetime.timezone.utc)
         })
     except Exception as e:
@@ -149,10 +139,9 @@ async def analyze_text(request: Request, message: UserMessage):
     return {
         "text": message.text,
         "sentiment": sentiment_label, 
-        "confidence": f"{round(prediction['score'] * 100, 2)}%"
+        "confidence": confidence
     }
 
-# --- ADDED: GET CHAT HISTORY ENDPOINT (Fixes the 404 Error) ---
 @app.get("/api/chat/history", tags=["Sentiment"])
 async def get_chat_history(request: Request, email: str = Query("guest")):
     try:
@@ -169,10 +158,8 @@ async def get_chat_history(request: Request, email: str = Query("guest")):
             })
         return formatted_history
     except Exception as e:
-        print(f"🚨 History Fetch Error: {e}")
         return []
 
-# --- REMAINING ENDPOINTS ---
 @app.get("/api/clusters", tags=["Analytics"])
 async def get_live_clusters(request: Request):
     try:
@@ -202,5 +189,5 @@ async def check_health(request: Request):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    # Using 'main:app' as string is safer for reload mode
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    
