@@ -85,8 +85,8 @@ def send_welcome_email(user_email: str, user_name: str, sender: str, password: s
     msg.add_alternative(html_content, subtype='html')
 
     try:
-        # Switch to Port 465 and SMTP_SSL to bypass Render's network restrictions
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+            server.starttls()
             server.login(sender, password)
             server.send_message(msg)
             print(f"✅ Professional HTML email sent to: {user_email}")
@@ -145,8 +145,8 @@ def send_order_receipt(order: OrderData, sender: str, password: str):
     msg.add_alternative(html_content, subtype='html')
 
     try:
-        # Switch to Port 465 and SMTP_SSL to bypass Render's network restrictions
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+            server.starttls()
             server.login(sender, password)
             server.send_message(msg)
             print(f"✅ Receipt dispatched to: {order.email}")
@@ -162,6 +162,7 @@ async def register(request: Request, user: AuthData, background_tasks: Backgroun
     if not user.name: raise HTTPException(status_code=400, detail="Name required")
     
     try:
+        # Note: Set check_deliverability=False if you encounter DNS issues on Render
         valid = validate_email(user.email, check_deliverability=False)
         normalized_email = valid.email
     except EmailNotValidError as e: 
@@ -170,6 +171,7 @@ async def register(request: Request, user: AuthData, background_tasks: Backgroun
     if await users_collection.find_one({"email": normalized_email}):
         raise HTTPException(status_code=400, detail="Identity already exists")
 
+    # The Role-Based insertion (user.role captures the frontend toggle)
     user_dict = {
         "name": user.name,
         "email": normalized_email,
