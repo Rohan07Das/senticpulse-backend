@@ -85,13 +85,14 @@ def send_welcome_email(user_email: str, user_name: str, sender: str, password: s
     msg.add_alternative(html_content, subtype='html')
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
-            server.starttls()
+        # Fixed: Changed to SMTP_SSL and port 465 to route traffic successfully on Render
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
             server.login(sender, password)
             server.send_message(msg)
             print(f"✅ Professional HTML email sent to: {user_email}")
     except Exception as e:
-        print(f"🚨 SMTP Error: {e}")
+        print(f"🚨 SMTP Welcome Email Error: {e}")
+
 
 def send_order_receipt(order: OrderData, sender: str, password: str):
     msg = EmailMessage()
@@ -145,8 +146,8 @@ def send_order_receipt(order: OrderData, sender: str, password: str):
     msg.add_alternative(html_content, subtype='html')
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
-            server.starttls()
+        # Fixed: Changed to SMTP_SSL and port 465 to route traffic successfully on Render
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
             server.login(sender, password)
             server.send_message(msg)
             print(f"✅ Receipt dispatched to: {order.email}")
