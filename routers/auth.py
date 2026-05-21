@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Query
 from pydantic import BaseModel, EmailStr
 from email_validator import validate_email, EmailNotValidError
-import resend
+import requests
 from typing import List, Any, Optional
 import os
 from datetime import datetime
@@ -27,10 +27,18 @@ class OrderData(BaseModel):
     items: List[OrderItem]
     total: Any
 
-# --- EMAIL UTILITIES (API-BASED BYPASS FOR RENDER) ---
+# --- EMAIL UTILITIES (BREVO FREE API BYPASS FOR RENDER) ---
 
 def send_welcome_email(user_email: str, user_name: str):
-    resend.api_key = os.getenv("RESEND_API_KEY")
+    api_key = os.getenv("BREVO_API_KEY")
+    sender_email = os.getenv("EMAIL_SENDER") or "aisenticpulse@gmail.com"
+    
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key
+    }
     
     html_content = f"""
     <!DOCTYPE html>
@@ -78,20 +86,33 @@ def send_welcome_email(user_email: str, user_name: str):
     </html>
     """
     
+    payload = {
+        "sender": {"name": "SenticPulse AI", "email": sender_email},
+        "to": [{"email": user_email, "name": user_name}],
+        "subject": "Welcome to the Neural Network | SenticPulse AI",
+        "htmlContent": html_content
+    }
+    
     try:
-        resend.Emails.send({
-            "from": "SenticPulse AI <onboarding@resend.dev>",
-            "to": [user_email],
-            "subject": "Welcome to the Neural Network | SenticPulse AI",
-            "html": html_content
-        })
-        print(f"✅ Professional HTML email sent via API to: {user_email}")
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code in [200, 201]:
+            print(f"✅ Brevo Welcome email sent to: {user_email}")
+        else:
+            print(f"🚨 Brevo Welcome Error ({response.status_code}): {response.text}")
     except Exception as e:
-        print(f"🚨 API Welcome Email Error: {e}")
+        print(f"🚨 Brevo Welcome Exception: {e}")
 
 
 def send_order_receipt(order: OrderData):
-    resend.api_key = os.getenv("RESEND_API_KEY")
+    api_key = os.getenv("BREVO_API_KEY")
+    sender_email = os.getenv("EMAIL_SENDER") or "aisenticpulse@gmail.com"
+    
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key
+    }
 
     item_rows = ""
     for item in order.items:
@@ -136,16 +157,21 @@ def send_order_receipt(order: OrderData):
     </html>
     """
 
+    payload = {
+        "sender": {"name": "SenticPulse AI", "email": sender_email},
+        "to": [{"email": order.email, "name": order.name}],
+        "subject": f"Neural Receipt: Order Confirmed",
+        "htmlContent": html_content
+    }
+
     try:
-        resend.Emails.send({
-            "from": "SenticPulse AI <onboarding@resend.dev>",
-            "to": [order.email],
-            "subject": f"Neural Receipt: Order Confirmed #{os.urandom(2).hex().upper()}",
-            "html": html_content
-        })
-        print(f"✅ Receipt dispatched via API to: {order.email}")
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code in [200, 201]:
+            print(f"✅ Brevo Receipt dispatched to: {order.email}")
+        else:
+            print(f"🚨 Brevo Receipt Error ({response.status_code}): {response.text}")
     except Exception as e:
-        print(f"🚨 API Receipt Error: {e}")
+        print(f"🚨 Brevo Receipt Exception: {e}")
 
 
 # --- AUTH ENDPOINTS ---
@@ -174,8 +200,7 @@ async def register(request: Request, user: AuthData, background_tasks: Backgroun
     }
     await users_collection.insert_one(user_dict)
     
-    # Check for the API Key value to fire background tasks
-    if os.getenv("RESEND_API_KEY"): 
+    if os.getenv("BREVO_API_KEY"): 
         background_tasks.add_task(send_welcome_email, normalized_email, user.name)
     
     return {
