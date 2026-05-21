@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Query
 from pydantic import BaseModel, EmailStr
 from email_validator import validate_email, EmailNotValidError
-import smtplib
-from email.message import EmailMessage
+import resend
 from typing import List, Any, Optional
 import os
 from datetime import datetime
@@ -28,13 +27,10 @@ class OrderData(BaseModel):
     items: List[OrderItem]
     total: Any
 
-# --- EMAIL UTILITIES ---
+# --- EMAIL UTILITIES (API-BASED BYPASS FOR RENDER) ---
 
-def send_welcome_email(user_email: str, user_name: str, sender: str, password: str):
-    msg = EmailMessage()
-    msg["Subject"] = "Welcome to the Neural Network | SenticPulse AI"
-    msg["From"] = f"SenticPulse AI <{sender}>"
-    msg["To"] = user_email
+def send_welcome_email(user_email: str, user_name: str):
+    resend.api_key = os.getenv("RESEND_API_KEY")
     
     html_content = f"""
     <!DOCTYPE html>
@@ -43,7 +39,7 @@ def send_welcome_email(user_email: str, user_name: str, sender: str, password: s
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
             body {{ font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }}
-            .container {{ max-width: 600px; margin: 20px auto; background-color: #0a0a0a; border-radius: 20px; overflow: hidden; shadow: 0 10px 30px rgba(0,0,0,0.5); }}
+            .container {{ max-width: 600px; margin: 20px auto; background-color: #0a0a0a; border-radius: 20px; overflow: hidden; }}
             .banner-container {{ width: 100%; line-height: 0; }}
             .banner-img {{ width: 100%; height: auto; display: block; border-bottom: 3px solid #b3ffe2; }}
             .content {{ padding: 40px 30px; text-align: center; background-color: #0a0a0a; }}
@@ -51,7 +47,7 @@ def send_welcome_email(user_email: str, user_name: str, sender: str, password: s
             p {{ color: #94a3b8; line-height: 1.8; font-size: 15px; margin: 10px 0; }}
             .highlight {{ color: #b3ffe2; font-weight: bold; }}
             .btn-wrapper {{ margin-top: 30px; }}
-            .btn {{ display: inline-block; padding: 16px 35px; background-color: #b3ffe2; color: #000000 !important; text-decoration: none; border-radius: 12px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; transition: transform 0.2s; }}
+            .btn {{ display: inline-block; padding: 16px 35px; background-color: #b3ffe2; color: #000000 !important; text-decoration: none; border-radius: 12px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; }}
             .footer {{ padding: 25px; text-align: center; color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; background-color: #050505; }}
         </style>
     </head>
@@ -81,24 +77,21 @@ def send_welcome_email(user_email: str, user_name: str, sender: str, password: s
     </body>
     </html>
     """
-    msg.set_content(f"Hi {user_name}, Welcome to SenticPulse AI! Login here: https://senticpulse-frontend.vercel.app/register")
-    msg.add_alternative(html_content, subtype='html')
-
+    
     try:
-        # Fixed: Changed to SMTP_SSL and port 465 to route traffic successfully on Render
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
-            server.login(sender, password)
-            server.send_message(msg)
-            print(f"✅ Professional HTML email sent to: {user_email}")
+        resend.Emails.send({
+            "from": "SenticPulse AI <onboarding@resend.dev>",
+            "to": [user_email],
+            "subject": "Welcome to the Neural Network | SenticPulse AI",
+            "html": html_content
+        })
+        print(f"✅ Professional HTML email sent via API to: {user_email}")
     except Exception as e:
-        print(f"🚨 SMTP Welcome Email Error: {e}")
+        print(f"🚨 API Welcome Email Error: {e}")
 
 
-def send_order_receipt(order: OrderData, sender: str, password: str):
-    msg = EmailMessage()
-    msg["Subject"] = f"Neural Receipt: Order Confirmed #{os.urandom(2).hex().upper()}"
-    msg["From"] = f"SenticPulse AI <{sender}>"
-    msg["To"] = order.email
+def send_order_receipt(order: OrderData):
+    resend.api_key = os.getenv("RESEND_API_KEY")
 
     item_rows = ""
     for item in order.items:
@@ -142,17 +135,17 @@ def send_order_receipt(order: OrderData, sender: str, password: str):
     </body>
     </html>
     """
-    msg.set_content(f"Order confirmed! Total: ₹{order.total}")
-    msg.add_alternative(html_content, subtype='html')
 
     try:
-        # Fixed: Changed to SMTP_SSL and port 465 to route traffic successfully on Render
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
-            server.login(sender, password)
-            server.send_message(msg)
-            print(f"✅ Receipt dispatched to: {order.email}")
+        resend.Emails.send({
+            "from": "SenticPulse AI <onboarding@resend.dev>",
+            "to": [order.email],
+            "subject": f"Neural Receipt: Order Confirmed #{os.urandom(2).hex().upper()}",
+            "html": html_content
+        })
+        print(f"✅ Receipt dispatched via API to: {order.email}")
     except Exception as e:
-        print(f"🚨 Receipt Error: {e}")
+        print(f"🚨 API Receipt Error: {e}")
 
 
 # --- AUTH ENDPOINTS ---
@@ -163,7 +156,6 @@ async def register(request: Request, user: AuthData, background_tasks: Backgroun
     if not user.name: raise HTTPException(status_code=400, detail="Name required")
     
     try:
-        # Note: Set check_deliverability=False if you encounter DNS issues on Render
         valid = validate_email(user.email, check_deliverability=False)
         normalized_email = valid.email
     except EmailNotValidError as e: 
@@ -172,7 +164,6 @@ async def register(request: Request, user: AuthData, background_tasks: Backgroun
     if await users_collection.find_one({"email": normalized_email}):
         raise HTTPException(status_code=400, detail="Identity already exists")
 
-    # The Role-Based insertion (user.role captures the frontend toggle)
     user_dict = {
         "name": user.name,
         "email": normalized_email,
@@ -183,9 +174,9 @@ async def register(request: Request, user: AuthData, background_tasks: Backgroun
     }
     await users_collection.insert_one(user_dict)
     
-    sender, pwd = request.app.state.EMAIL_SENDER, request.app.state.EMAIL_PASSWORD
-    if sender and pwd: 
-        background_tasks.add_task(send_welcome_email, normalized_email, user.name, sender, pwd)
+    # Check for the API Key value to fire background tasks
+    if os.getenv("RESEND_API_KEY"): 
+        background_tasks.add_task(send_welcome_email, normalized_email, user.name)
     
     return {
         "status": "success", 
@@ -199,7 +190,6 @@ async def login(request: Request, user: AuthData):
     if not db_user: 
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # Strict Role-Based Check
     if db_user.get("role") != user.role:
         raise HTTPException(status_code=403, detail=f"Access Denied: Lacks {user.role.upper()} clearance.")
     
@@ -252,7 +242,5 @@ async def save_order(request: Request, order: OrderData):
 
 @router.post("/send-receipt")
 async def handle_receipt(request: Request, order: OrderData, background_tasks: BackgroundTasks):
-    sender = request.app.state.EMAIL_SENDER
-    pwd = request.app.state.EMAIL_PASSWORD
-    background_tasks.add_task(send_order_receipt, order, sender, pwd)
+    background_tasks.add_task(send_order_receipt, order)
     return {"status": "success", "message": "Neural receipt dispatched"}
